@@ -6,7 +6,10 @@ using namespace oni::driver;
 using namespace kinect2_device;
 
 static const char VENDOR_VAL[] = "Microsoft";
-static const char NAME_VAL[] = "Kinect v2";
+
+// adding more characters after "kinect" does not work with nite: please refer to here
+// https://github.com/OpenKinect/libfreenect2/issues/243#issuecomment-107170614
+static const char NAME_VAL[] = "Kinect"; 
 
 Kinect2Driver::Kinect2Driver(OniDriverServices* pDriverServices)
   : DriverBase(pDriverServices)

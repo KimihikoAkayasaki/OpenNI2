@@ -1,13 +1,25 @@
 #include "DepthKinect2Stream.h"
-
+#include "PS1080.h"
 #include "Kinect2StreamImpl.h"
 
 using namespace oni::driver;
 using namespace kinect2_device;
-#define DEFAULT_FPS 30
 
-#define DEVICE_MAX_DEPTH_VAL 10000
 #define FILTER_RELIABLE_DEPTH_VALUE(VALUE) (((VALUE) < DEVICE_MAX_DEPTH_VAL) ? (VALUE) : 0)
+
+namespace
+{;
+constexpr const int DEFAULT_FPS = 30;
+constexpr const XnInt MAX_SHIFT_VAL = 2047;
+constexpr const XnInt PARAM_COEFF_VAL = 4;
+constexpr const XnInt SHIFT_SCALE_VAL = 10;
+constexpr const XnInt GAIN_VAL = 42;
+constexpr const XnInt ZPD_VAL = 120;
+constexpr const XnInt CONST_SHIFT_VAL = 200;
+constexpr const XnInt DEVICE_MAX_DEPTH_VAL = 10000;
+constexpr const XnDouble ZPPS_VAL = 0.10520000010728836;
+constexpr const XnDouble LDDIS_VAL = 7.5;
+}
 
 DepthKinect2Stream::DepthKinect2Stream(Kinect2StreamImpl* pStreamImpl)
   : BaseKinect2Stream(pStreamImpl)
@@ -83,6 +95,82 @@ OniStatus DepthKinect2Stream::getProperty(int propertyId, void* data, int* pData
       status = ONI_STATUS_OK;
       break;
     }
+  case XN_STREAM_PROPERTY_GAIN:
+  {
+	  XnInt* val = (XnInt*)data;
+	  *val = GAIN_VAL;
+	  status = ONI_STATUS_OK;
+	  break;
+  }
+  case XN_STREAM_PROPERTY_CONST_SHIFT:
+  {
+	  XnInt* val = (XnInt*)data;
+	  *val = CONST_SHIFT_VAL;
+	  status = ONI_STATUS_OK;
+	  break;
+  }
+  case XN_STREAM_PROPERTY_MAX_SHIFT:
+  {
+	  XnInt* val = (XnInt*)data;
+	  *val = MAX_SHIFT_VAL;
+	  status = ONI_STATUS_OK;
+	  break;
+  }
+  case XN_STREAM_PROPERTY_PARAM_COEFF:
+  {
+	  XnInt* val = (XnInt*)data;
+	  *val = PARAM_COEFF_VAL;
+	  status = ONI_STATUS_OK;
+	  break;
+  }
+  case XN_STREAM_PROPERTY_SHIFT_SCALE:
+  {
+	  XnInt* val = (XnInt*)data;
+	  *val = SHIFT_SCALE_VAL;
+	  status = ONI_STATUS_OK;
+	  break;
+  }
+  case XN_STREAM_PROPERTY_ZERO_PLANE_DISTANCE:
+  {
+	  XnInt* val = (XnInt*)data;
+	  *val = ZPD_VAL;
+	  status = ONI_STATUS_OK;
+	  break;
+  }
+  case XN_STREAM_PROPERTY_ZERO_PLANE_PIXEL_SIZE:
+  {
+	  XnDouble* val = (XnDouble*)data;
+	  *val = ZPPS_VAL;
+	  status = ONI_STATUS_OK;
+	  break;
+  }
+  case XN_STREAM_PROPERTY_EMITTER_DCMOS_DISTANCE:
+  {
+	  XnDouble* val = (XnDouble*)data;
+	  *val = LDDIS_VAL;
+	  status = ONI_STATUS_OK;
+	  break;
+  }
+  case XN_STREAM_PROPERTY_S2D_TABLE:              // OniDepthPixel[]
+  {
+	  uint16_t* s2d = (uint16_t*)data;
+	  *pDataSize = sizeof(*s2d) * 2048;
+	  memset(data, 0, *pDataSize);
+	  for (int i = 1; i <= 1052; i++)
+		  s2d[i] = static_cast<uint16_t>(342205.0 / (1086.671 - i));
+	  status = ONI_STATUS_OK;
+	  break;
+  }
+  case XN_STREAM_PROPERTY_D2S_TABLE:              // unsigned short[]
+  {
+	  uint16_t* d2s = (uint16_t*)data;
+	  *pDataSize = sizeof(*d2s) * 10001;
+	  memset(data, 0, *pDataSize);
+	  for (int i = 315; i <= 10000; i++)
+		  d2s[i] = static_cast<uint16_t>(1086.671 - 342205.0 / (i + 1));
+	  status = ONI_STATUS_OK;
+	  break;
+  }
   default:
     status = BaseKinect2Stream::getProperty(propertyId, data, pDataSize);
     break;
@@ -98,6 +186,16 @@ OniBool DepthKinect2Stream::isPropertySupported(int propertyId)
   {
   case ONI_STREAM_PROPERTY_MAX_VALUE:
   case ONI_STREAM_PROPERTY_MIRRORING:
+  case XN_STREAM_PROPERTY_GAIN:
+  case XN_STREAM_PROPERTY_CONST_SHIFT:
+  case XN_STREAM_PROPERTY_MAX_SHIFT:
+  case XN_STREAM_PROPERTY_PARAM_COEFF:
+  case XN_STREAM_PROPERTY_SHIFT_SCALE:
+  case XN_STREAM_PROPERTY_ZERO_PLANE_DISTANCE:
+  case XN_STREAM_PROPERTY_ZERO_PLANE_PIXEL_SIZE:
+  case XN_STREAM_PROPERTY_EMITTER_DCMOS_DISTANCE:
+  case XN_STREAM_PROPERTY_S2D_TABLE:
+  case XN_STREAM_PROPERTY_D2S_TABLE:
     status = TRUE;
   default:
     status = BaseKinect2Stream::isPropertySupported(propertyId);
@@ -108,12 +206,53 @@ OniBool DepthKinect2Stream::isPropertySupported(int propertyId)
 
 void DepthKinect2Stream::notifyAllProperties()
 {
-  XnInt nInt;
-  int size = sizeof(nInt);
-  getProperty(ONI_STREAM_PROPERTY_MAX_VALUE, &nInt, &size);
-  raisePropertyChanged(ONI_STREAM_PROPERTY_MAX_VALUE, &nInt, size);
+	XnInt nInt;
+    int size = sizeof(nInt);
+	getProperty(ONI_STREAM_PROPERTY_MAX_VALUE, &nInt, &size);
+	raisePropertyChanged(ONI_STREAM_PROPERTY_MAX_VALUE, &nInt, size);
 
-  BaseKinect2Stream::notifyAllProperties();
+    XnBool nBool;
+	size = sizeof(nBool);
+	getProperty(ONI_STREAM_PROPERTY_MIRRORING, &nBool, &size);
+	raisePropertyChanged(ONI_STREAM_PROPERTY_MIRRORING, &nBool, size);
+
+	XnDouble nDouble;
+	size = sizeof(nDouble);
+	getProperty(XN_STREAM_PROPERTY_ZERO_PLANE_PIXEL_SIZE, &nDouble, &size);
+	raisePropertyChanged(XN_STREAM_PROPERTY_ZERO_PLANE_PIXEL_SIZE, &nDouble, size);
+
+	getProperty(XN_STREAM_PROPERTY_EMITTER_DCMOS_DISTANCE, &nDouble, &size);
+	raisePropertyChanged(XN_STREAM_PROPERTY_EMITTER_DCMOS_DISTANCE, &nDouble, size);
+
+	getProperty(XN_STREAM_PROPERTY_GAIN, &nInt, &size);
+	raisePropertyChanged(XN_STREAM_PROPERTY_GAIN, &nInt, size);
+
+	getProperty(XN_STREAM_PROPERTY_CONST_SHIFT, &nInt, &size);
+	raisePropertyChanged(XN_STREAM_PROPERTY_CONST_SHIFT, &nInt, size);
+
+	getProperty(XN_STREAM_PROPERTY_MAX_SHIFT, &nInt, &size);
+	raisePropertyChanged(XN_STREAM_PROPERTY_MAX_SHIFT, &nInt, size);
+
+	getProperty(XN_STREAM_PROPERTY_SHIFT_SCALE, &nInt, &size);
+	raisePropertyChanged(XN_STREAM_PROPERTY_SHIFT_SCALE, &nInt, size);
+
+	getProperty(XN_STREAM_PROPERTY_ZERO_PLANE_DISTANCE, &nInt, &size);
+	raisePropertyChanged(XN_STREAM_PROPERTY_ZERO_PLANE_DISTANCE, &nInt, size);
+
+	unsigned short nBuff[10001];
+    size = sizeof(XnUInt16) * 2048;
+	getProperty(XN_STREAM_PROPERTY_S2D_TABLE, nBuff, &size);
+	raisePropertyChanged(XN_STREAM_PROPERTY_S2D_TABLE, nBuff, size);
+
+    size = sizeof(XnUInt16) * 10001;
+	getProperty(XN_STREAM_PROPERTY_D2S_TABLE, nBuff, &size);
+	raisePropertyChanged(XN_STREAM_PROPERTY_D2S_TABLE, nBuff, size);
+
+	size = sizeof(PARAM_COEFF_VAL);
+	getProperty(XN_STREAM_PROPERTY_PARAM_COEFF, nBuff, &size);
+	raisePropertyChanged(XN_STREAM_PROPERTY_PARAM_COEFF, nBuff, size);
+
+    BaseKinect2Stream::notifyAllProperties();
 }
 
 void DepthKinect2Stream::copyDepthPixelsStraight(const UINT16* data_in, int width, int height, OniFrame* pFrame)
