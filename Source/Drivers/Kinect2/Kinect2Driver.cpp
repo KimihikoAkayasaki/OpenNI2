@@ -43,14 +43,20 @@ OniStatus Kinect2Driver::initialize(DeviceConnectedCallback connectedCallback,
   }
 
   // Wait some time to let the sensor initialize
-  Sleep(500);
+  BOOLEAN available = FALSE;
+  for (size_t i = 0; i < (60000 / 500); ++i)
+  {
+	  hr = pKinectSensor->get_IsAvailable(&available);
+	  if (SUCCEEDED(hr) && available)
+		  break;
+	  Sleep(500);
+  }
 
-  BOOLEAN available;
-  hr = pKinectSensor->get_IsAvailable(&available);
-  if (FAILED(hr) || !available) {
-    pKinectSensor->Close();
-    pKinectSensor->Release();
-    return ONI_STATUS_NO_DEVICE;
+  if (!available)
+  {
+	  pKinectSensor->Close();
+	  pKinectSensor->Release();
+	  return ONI_STATUS_NO_DEVICE;
   }
 
   // Get sensor info
