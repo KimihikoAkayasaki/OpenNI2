@@ -98,7 +98,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_WINDLL;%(PreprocessorDefinitions);DepthUtils_EXPORT</PreprocessorDefinitions>
       <WarningLevel>Level4</WarningLevel>
-      <TreatWarningAsError>true</TreatWarningAsError>
+      <TreatWarningAsError>false</TreatWarningAsError>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <MinimalRebuild>
       </MinimalRebuild>
@@ -138,7 +138,7 @@
       <Optimization>MaxSpeed</Optimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_MBCS;%(PreprocessorDefinitions);DepthUtils_EXPORT</PreprocessorDefinitions>
-      <TreatWarningAsError>true</TreatWarningAsError>
+      <TreatWarningAsError>false</TreatWarningAsError>
       <WholeProgramOptimization>true</WholeProgramOptimization>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
@@ -164,7 +164,7 @@
       <Optimization>MaxSpeed</Optimization>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_MBCS;%(PreprocessorDefinitions);DepthUtils_EXPORT</PreprocessorDefinitions>
-      <TreatWarningAsError>true</TreatWarningAsError>
+      <TreatWarningAsError>false</TreatWarningAsError>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>

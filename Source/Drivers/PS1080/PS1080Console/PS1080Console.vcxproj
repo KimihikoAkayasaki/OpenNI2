@@ -91,7 +91,7 @@
       <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
       <DisableSpecificWarnings>4250;4127;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <TreatWarningAsError>true</TreatWarningAsError>
+      <TreatWarningAsError>false</TreatWarningAsError>
     </ClCompile>
     <Link>
       <AdditionalDependencies>XnLib.lib;OpenNI2.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -144,7 +144,7 @@
       <WarningLevel>Level4</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>4250;4127;%(DisableSpecificWarnings)</DisableSpecificWarnings>
-      <TreatWarningAsError>true</TreatWarningAsError>
+      <TreatWarningAsError>false</TreatWarningAsError>
     </ClCompile>
     <Link>
       <AdditionalDependencies>XnLib.lib;OpenNI2.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -174,7 +174,7 @@
       <WarningLevel>Level4</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>4250;4127;%(DisableSpecificWarnings)</DisableSpecificWarnings>
-      <TreatWarningAsError>true</TreatWarningAsError>
+      <TreatWarningAsError>false</TreatWarningAsError>
     </ClCompile>
     <Link>
       <AdditionalDependencies>XnLib.lib;OpenNI2.lib;%(AdditionalDependencies)</AdditionalDependencies>

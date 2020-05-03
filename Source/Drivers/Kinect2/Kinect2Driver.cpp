@@ -44,12 +44,12 @@ OniStatus Kinect2Driver::initialize(DeviceConnectedCallback connectedCallback,
 
   // Wait some time to let the sensor initialize
   BOOLEAN available = FALSE;
-  for (size_t i = 0; i < (60000 / 500); ++i)
+  for (size_t i = 0; i < (60000 / 100); ++i)
   {
 	  hr = pKinectSensor->get_IsAvailable(&available);
 	  if (SUCCEEDED(hr) && available)
 		  break;
-	  Sleep(500);
+	  Sleep(100);
   }
 
   if (!available)

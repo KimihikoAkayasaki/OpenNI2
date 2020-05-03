@@ -1,11 +1,12 @@
+#include <algorithm>
 #include "DepthKinect2Stream.h"
 #include "PS1080.h"
 #include "Kinect2StreamImpl.h"
 
+#undef min
+
 using namespace oni::driver;
 using namespace kinect2_device;
-
-#define FILTER_RELIABLE_DEPTH_VALUE(VALUE) (((VALUE) < DEVICE_MAX_DEPTH_VAL) ? (VALUE) : 0)
 
 namespace
 {;
@@ -19,6 +20,12 @@ constexpr const XnInt CONST_SHIFT_VAL = 200;
 constexpr const XnInt DEVICE_MAX_DEPTH_VAL = 10000;
 constexpr const XnDouble ZPPS_VAL = 0.10520000010728836;
 constexpr const XnDouble LDDIS_VAL = 7.5;
+
+template < typename DepthType >
+constexpr inline DepthType filter_reliable_depth_value(const DepthType value)
+{
+    return value < DEVICE_MAX_DEPTH_VAL ? value : 0;
+}
 }
 
 DepthKinect2Stream::DepthKinect2Stream(Kinect2StreamImpl* pStreamImpl)
@@ -26,8 +33,8 @@ DepthKinect2Stream::DepthKinect2Stream(Kinect2StreamImpl* pStreamImpl)
 {
   m_videoMode.pixelFormat = ONI_PIXEL_FORMAT_DEPTH_1_MM;
   m_videoMode.fps = DEFAULT_FPS;
-  m_videoMode.resolutionX = 512;
-  m_videoMode.resolutionY = 424;
+  m_videoMode.resolutionX = 640; // 512;
+  m_videoMode.resolutionY = 480; // 424;
   m_colorSpaceCoords = new ColorSpacePoint[512*424];
   m_registeredDepthMap = new UINT16[512*424];
 }
@@ -257,24 +264,57 @@ void DepthKinect2Stream::notifyAllProperties()
 
 void DepthKinect2Stream::copyDepthPixelsStraight(const UINT16* data_in, int width, int height, OniFrame* pFrame)
 {
+    const auto copyFrame = [](const UINT16* srcPix, int srcX, int srcY, int srcStride, UINT16* dstPix, int dstX, int dstY, int dstStride, int width, int height, bool mirroring)
+    {
+        srcPix += srcX + srcY * srcStride;
+        dstPix += dstX + dstY * dstStride;
+
+        for (int y = 0; y < height; ++y) {
+            UINT16* dst = dstPix + y * dstStride;
+            const UINT16* src = srcPix + y * srcStride;
+            if (mirroring) {
+                dst += width;
+                for (int x = 0; x < width; ++x)
+                    *dst-- = filter_reliable_depth_value(*src++);
+            }
+            else {
+                for (int x = 0; x < width; x++)
+                    *dst++ = filter_reliable_depth_value(*src++);
+            }
+        }
+    };
+
+	if (width < pFrame->width || height < pFrame->height)
+		memset(pFrame->data, 0x00, pFrame->width * pFrame->height * 2);
+
+	const auto targetWidth = std::min(width, pFrame->width);
+	const auto targetHeight = std::min(height, pFrame->height);
+
+	copyFrame
+    (
+        static_cast<UINT16*>((void*)data_in), pFrame->cropOriginX, pFrame->cropOriginY, width,
+		static_cast<UINT16*>(pFrame->data), 0, 0, pFrame->width,
+        targetWidth, targetHeight, false //mirroring
+    );
+
   // Copy the depth pixels to OniDriverFrame
   // with applying cropping but NO depth-to-image registration.
 
-  const int xStride = width/m_videoMode.resolutionX;
-  const int yStride = height/m_videoMode.resolutionY;
-  const int frameX = pFrame->cropOriginX * xStride;
-  const int frameY = pFrame->cropOriginY * yStride;
-  const int frameWidth = pFrame->width * xStride;
-  const int frameHeight = pFrame->height * yStride;
+  //const int xStride = width/m_videoMode.resolutionX;
+  //const int yStride = height/m_videoMode.resolutionY;
+  //const int frameX = pFrame->cropOriginX * xStride;
+  //const int frameY = pFrame->cropOriginY * yStride;
+  //const int frameWidth = pFrame->width * xStride;
+  //const int frameHeight = pFrame->height * yStride;
 
-  unsigned short* data_out = (unsigned short*) pFrame->data;
-  for (int y = frameY; y < frameY + frameHeight; y += yStride) {
-    for (int x = frameX; x < frameX + frameWidth; x += xStride) {
-      unsigned short* iter = const_cast<unsigned short*>(data_in + (y*width + x));
-      *data_out = FILTER_RELIABLE_DEPTH_VALUE(*iter);
-      data_out++;
-    }
-  }
+  //unsigned short* data_out = (unsigned short*) pFrame->data;
+  //for (int y = frameY; y < frameY + frameHeight; y += yStride) {
+  //  for (int x = frameX; x < frameX + frameWidth; x += xStride) {
+  //    unsigned short* iter = const_cast<unsigned short*>(data_in + (y*width + x));
+  //    *data_out = FILTER_RELIABLE_DEPTH_VALUE(*iter);
+  //    data_out++;
+  //  }
+  //}
 }
 
 void DepthKinect2Stream::copyDepthPixelsWithImageRegistration(const UINT16* data_in, int width, int height, OniFrame* pFrame)
@@ -313,7 +353,7 @@ void DepthKinect2Stream::copyDepthPixelsWithImageRegistration(const UINT16* data
       const int cy = static_cast<int>(fY + 0.5f);
       if (cx >= 0 && cy >= 0 && cx < width && cy < height) {
         unsigned short* iter = const_cast<unsigned short*>(data_in + (y*width + x));
-        const unsigned short d = FILTER_RELIABLE_DEPTH_VALUE(*iter);
+        const unsigned short d = filter_reliable_depth_value(*iter);
         unsigned short* const p = data_out + cx + cy * width;
         if (*p == 0 || *p > d) *p = d;
       }
@@ -342,7 +382,7 @@ void DepthKinect2Stream::copyDepthPixelsWithImageRegistration(const UINT16* data
         }
       }
       else {
-        *data_out = FILTER_RELIABLE_DEPTH_VALUE(*iter);
+        *data_out = filter_reliable_depth_value(*iter);
       }
       data_out++;
     }
