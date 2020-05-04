@@ -201,14 +201,14 @@ void Kinect2StreamImpl::setDefaultVideoMode()
   case ONI_SENSOR_COLOR:
     m_videoMode.pixelFormat = ONI_PIXEL_FORMAT_RGB888;
     m_videoMode.fps         = DEFAULT_FPS;
-    m_videoMode.resolutionX = 960;
-    m_videoMode.resolutionY = 540;
+	m_videoMode.resolutionX = 1920;
+	m_videoMode.resolutionY = 1080;
     break;
   case ONI_SENSOR_DEPTH:
     m_videoMode.pixelFormat = ONI_PIXEL_FORMAT_DEPTH_1_MM;
     m_videoMode.fps         = DEFAULT_FPS;
-    m_videoMode.resolutionX = 512;
-    m_videoMode.resolutionY = 424;
+    m_videoMode.resolutionX = 640; // 512;
+    m_videoMode.resolutionY = 480; // 424;
     break;
   case ONI_SENSOR_IR:
     m_videoMode.pixelFormat = ONI_PIXEL_FORMAT_GRAY16;

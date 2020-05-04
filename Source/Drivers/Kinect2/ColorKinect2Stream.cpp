@@ -11,8 +11,8 @@ ColorKinect2Stream::ColorKinect2Stream(Kinect2StreamImpl* pStreamImpl)
 {
   m_videoMode.pixelFormat = ONI_PIXEL_FORMAT_RGB888;
   m_videoMode.fps         = DEFAULT_FPS;
-  m_videoMode.resolutionX = 960;
-  m_videoMode.resolutionY = 540;
+  m_videoMode.resolutionX = 1920;
+  m_videoMode.resolutionY = 1080;
 }
 
 void ColorKinect2Stream::frameReady(void* data, int width, int height, double timestamp)

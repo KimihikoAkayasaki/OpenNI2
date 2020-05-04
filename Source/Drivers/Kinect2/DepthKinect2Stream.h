@@ -1,6 +1,7 @@
 #ifndef _DEPTH_KINECT2_STREAM_H_
 #define _DEPTH_KINECT2_STREAM_H_
 
+#include <cstddef>
 #include "BaseKinect2Stream.h"
 #include <Kinect.h>
 
@@ -19,8 +20,8 @@ namespace kinect2_device
       virtual void notifyAllProperties();
 
     private:
-      void copyDepthPixelsStraight(const UINT16* data_in, int width, int height, OniFrame* pFrame);
-      void copyDepthPixelsWithImageRegistration(const UINT16* data_in, int width, int height, OniFrame* pFrame);
+      void copyDepthPixelsStraight(const UINT16* data_in, std::size_t width, std::size_t height, OniFrame* pFrame);
+      void copyDepthPixelsWithImageRegistration(const UINT16* data_in, std::size_t width, std::size_t height, OniFrame* pFrame);
 
     private:
       ColorSpacePoint* m_colorSpaceCoords;
