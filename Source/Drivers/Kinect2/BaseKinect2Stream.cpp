@@ -6,7 +6,8 @@ using namespace oni::driver;
 using namespace kinect2_device;
 
 BaseKinect2Stream::BaseKinect2Stream(Kinect2StreamImpl* pStreamImpl)
-  : m_pStreamImpl(pStreamImpl)
+  : m_pStreamImpl(pStreamImpl),
+    m_videoMode()
 {
   m_running = false;
   m_frameIdx = 0;
@@ -42,7 +43,7 @@ OniStatus BaseKinect2Stream::getProperty(int propertyId, void* data, int* pDataS
   case ONI_STREAM_PROPERTY_CROPPING:
     if (*pDataSize != sizeof(OniCropping))
     {
-      printf("Unexpected size: %d != %d\n", *pDataSize, sizeof(OniCropping));
+      printf("Unexpected size: %d != %zd\n", *pDataSize, sizeof(OniCropping));
       status = ONI_STATUS_ERROR;
     }
     else
@@ -69,7 +70,7 @@ OniStatus BaseKinect2Stream::getProperty(int propertyId, void* data, int* pDataS
   case ONI_STREAM_PROPERTY_VIDEO_MODE:
     if (*pDataSize != sizeof(OniVideoMode))
     {
-      printf("Unexpected size: %d != %d\n", *pDataSize, sizeof(OniVideoMode));
+      printf("Unexpected size: %d != %zd\n", *pDataSize, sizeof(OniVideoMode));
       status = ONI_STATUS_ERROR;
     }
     else
@@ -92,7 +93,7 @@ OniStatus BaseKinect2Stream::setProperty(int propertyId, const void* data, int d
   {
     if (dataSize != sizeof(OniCropping))
     {
-      printf("Unexpected size: %d != %d\n", dataSize, sizeof(OniCropping));
+      printf("Unexpected size: %d != %zd\n", dataSize, sizeof(OniCropping));
       status = ONI_STATUS_ERROR;
     }
     status = SetCropping((OniCropping*)data);
@@ -101,7 +102,7 @@ OniStatus BaseKinect2Stream::setProperty(int propertyId, const void* data, int d
   {
     if (dataSize != sizeof(OniVideoMode))
     {
-      printf("Unexpected size: %d != %d\n", dataSize, sizeof(OniVideoMode));
+      printf("Unexpected size: %d != %zd\n", dataSize, sizeof(OniVideoMode));
        status = ONI_STATUS_ERROR;
     }
     status = SetVideoMode((OniVideoMode*)data);

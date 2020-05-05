@@ -15,7 +15,7 @@ ColorKinect2Stream::ColorKinect2Stream(Kinect2StreamImpl* pStreamImpl)
   m_videoMode.resolutionY = 1080;
 }
 
-void ColorKinect2Stream::frameReady(void* data, int width, int height, double timestamp)
+void kinect2_device::ColorKinect2Stream::frameReady(void* data, std::size_t width, std::size_t height, double timestamp)
 {
   OniFrame* pFrame = getServices().acquireFrame();
   pFrame->videoMode.resolutionX = m_videoMode.resolutionX;
@@ -45,14 +45,14 @@ void ColorKinect2Stream::frameReady(void* data, int width, int height, double ti
 
   RGBQUAD* data_in = reinterpret_cast<RGBQUAD*>(data);
   OniRGB888Pixel* data_out = reinterpret_cast<OniRGB888Pixel*>(pFrame->data);
-  const int xStride = width/m_videoMode.resolutionX;
-  const int yStride = height/m_videoMode.resolutionY;
-  const int frameX = pFrame->cropOriginX * xStride;
-  const int frameY = pFrame->cropOriginY * yStride;
-  const int frameWidth = pFrame->width * xStride;
-  const int frameHeight = pFrame->height * yStride;
-  for (int y = frameY; y < frameY + frameHeight; y += yStride) {
-    for (int x = frameX; x < frameX + frameWidth; x += xStride) {
+  const std::size_t xStride = width/m_videoMode.resolutionX;
+  const std::size_t yStride = height/m_videoMode.resolutionY;
+  const std::size_t frameX = pFrame->cropOriginX * xStride;
+  const std::size_t frameY = pFrame->cropOriginY * yStride;
+  const std::size_t frameWidth = pFrame->width * xStride;
+  const std::size_t frameHeight = pFrame->height * yStride;
+  for (std::size_t y = frameY; y < frameY + frameHeight; y += yStride) {
+    for (std::size_t x = frameX; x < frameX + frameWidth; x += xStride) {
       RGBQUAD* iter = data_in + (y*width + x);
       data_out->b = iter->rgbBlue;
       data_out->r = iter->rgbRed;

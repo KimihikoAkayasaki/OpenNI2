@@ -1,6 +1,7 @@
 #ifndef _BASE_KINECT2_STREAM_H_
 #define _BASE_KINECT2_STREAM_H_
 
+#include <cstddef>
 #include "Driver\OniDriverAPI.h"
 
 namespace kinect2_device
@@ -28,7 +29,7 @@ namespace kinect2_device
 
       bool isRunning() { return m_running; }
 
-      virtual void frameReady(void* data, int width, int height, double timestamp) = 0;
+      virtual void frameReady(void* data, std::size_t width, std::size_t height, double timestamp) = 0;
 
     protected:
       Kinect2StreamImpl *m_pStreamImpl;

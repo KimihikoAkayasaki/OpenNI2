@@ -107,7 +107,7 @@ DepthKinect2Stream::~DepthKinect2Stream()
   delete[] m_registeredDepthMap;
 }
 
-void DepthKinect2Stream::frameReady(void* data, int width, int height, double timestamp)
+void kinect2_device::DepthKinect2Stream::frameReady(void* data, std::size_t width, std::size_t height, double timestamp)
 {
     assert(width >= 0 && height >= 0);
   OniFrame* pFrame = getServices().acquireFrame();
@@ -226,7 +226,7 @@ OniStatus DepthKinect2Stream::getProperty(int propertyId, void* data, int* pData
 	  uint16_t* s2d = (uint16_t*)data;
 	  *pDataSize = sizeof(*s2d) * 2048;
 	  memset(data, 0, *pDataSize);
-	  for (int i = 1; i <= 1052; i++)
+	  for (std::size_t i = 1; i <= 1052; ++i)
 		  s2d[i] = static_cast<uint16_t>(342205.0 / (1086.671 - i));
 	  status = ONI_STATUS_OK;
 	  break;
@@ -236,7 +236,7 @@ OniStatus DepthKinect2Stream::getProperty(int propertyId, void* data, int* pData
 	  uint16_t* d2s = (uint16_t*)data;
 	  *pDataSize = sizeof(*d2s) * 10001;
 	  memset(data, 0, *pDataSize);
-	  for (int i = 315; i <= 10000; i++)
+	  for (std::size_t i = 315; i <= 10000; ++i)
 		  d2s[i] = static_cast<uint16_t>(1086.671 - 342205.0 / (i + 1));
 	  status = ONI_STATUS_OK;
 	  break;
@@ -309,7 +309,7 @@ void DepthKinect2Stream::notifyAllProperties()
 	getProperty(XN_STREAM_PROPERTY_ZERO_PLANE_DISTANCE, &nInt, &size);
 	raisePropertyChanged(XN_STREAM_PROPERTY_ZERO_PLANE_DISTANCE, &nInt, size);
 
-    XnUInt16 nBuff[10001];
+    static thread_local XnUInt16 nBuff[10001];
     size = sizeof(XnUInt16) * 2048;
 	getProperty(XN_STREAM_PROPERTY_S2D_TABLE, nBuff, &size);
 	raisePropertyChanged(XN_STREAM_PROPERTY_S2D_TABLE, nBuff, size);
@@ -328,7 +328,7 @@ void DepthKinect2Stream::notifyAllProperties()
 void DepthKinect2Stream::copyDepthPixelsStraight(const UINT16* data_in, std::size_t width, std::size_t height, OniFrame* pFrame)
 {
 	if (width < pFrame->width || height < pFrame->height)
-		memset(pFrame->data, 0x00, pFrame->width * pFrame->height * sizeof(UINT16));
+		memset(pFrame->data, 0x00, static_cast<std::size_t>(pFrame->width) * static_cast<std::size_t>(pFrame->height) * sizeof(UINT16));
 
 	const auto targetWidth = std::min(width, (std::size_t)pFrame->width);
 	const auto targetHeight = std::min(height, (std::size_t)pFrame->height);
@@ -367,8 +367,8 @@ void DepthKinect2Stream::copyDepthPixelsWithImageRegistration(const UINT16* data
         {
             const float fX = mappedCoordsIter->X * xFactor;
             const float fY = mappedCoordsIter->Y * yFactor;
-            const std::size_t cx = static_cast<std::size_t>(fX + 0.5f);
-            const std::size_t cy = static_cast<std::size_t>(fY + 0.5f);
+            const std::size_t cx = static_cast<std::size_t>(fX + 0.5);
+            const std::size_t cy = static_cast<std::size_t>(fY + 0.5);
             if (cx >= 0 && cy >= 0 && cx < width && cy < height)
             {
                 unsigned short* iter = const_cast<unsigned short*>(data_in + (y * width + x));
@@ -381,7 +381,7 @@ void DepthKinect2Stream::copyDepthPixelsWithImageRegistration(const UINT16* data
     }
 
     if (width < pFrame->width || height < pFrame->height)
-	    memset(pFrame->data, 0x00, pFrame->width * pFrame->height * sizeof(UINT16));
+	    memset(pFrame->data, 0x00, static_cast<std::size_t>(pFrame->width) * static_cast<std::size_t>(pFrame->height) * sizeof(UINT16));
 
     const auto targetWidth = std::min(width, (std::size_t)pFrame->width);
     const auto targetHeight = std::min(height, (std::size_t)pFrame->height);

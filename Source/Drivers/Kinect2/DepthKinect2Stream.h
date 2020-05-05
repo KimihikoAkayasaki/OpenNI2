@@ -1,7 +1,6 @@
 #ifndef _DEPTH_KINECT2_STREAM_H_
 #define _DEPTH_KINECT2_STREAM_H_
 
-#include <cstddef>
 #include "BaseKinect2Stream.h"
 #include <Kinect.h>
 
@@ -13,7 +12,7 @@ namespace kinect2_device
       DepthKinect2Stream(Kinect2StreamImpl* pStreamImpl);
       virtual ~DepthKinect2Stream();
 
-      virtual void frameReady(void* data, int width, int height, double timestamp);
+      virtual void frameReady(void* data, std::size_t width, std::size_t height, double timestamp);
 
       virtual OniStatus getProperty(int propertyId, void* data, int* pDataSize);
       virtual OniBool isPropertySupported(int propertyId);

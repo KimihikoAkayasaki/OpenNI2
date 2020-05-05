@@ -12,7 +12,8 @@ Kinect2Device::Kinect2Device(IKinectSensor* pKinectSensor)
   : m_pDepthStream(NULL),
     m_pColorStream(NULL),
     m_pIRStream(NULL),
-    m_pKinectSensor(pKinectSensor)
+    m_pKinectSensor(pKinectSensor),
+    m_perfCounter(0)
 {
   m_numSensors = 3;
 
@@ -140,7 +141,7 @@ OniStatus Kinect2Device::setProperty(int propertyId, const void* data, int dataS
       }
     }
     else {
-      printf("Unexpected size: %d != %d\n", dataSize, sizeof(OniImageRegistrationMode));
+      printf("Unexpected size: %d != %zd\n", dataSize, sizeof(OniImageRegistrationMode));
       return ONI_STATUS_ERROR;
     }
   }
@@ -161,7 +162,7 @@ OniStatus Kinect2Device::getProperty(int propertyId, void* data, int* pDataSize)
       }
     }
     else {
-      printf("Unexpected size: %d != %d\n", *pDataSize, sizeof(OniImageRegistrationMode));
+      printf("Unexpected size: %d != %zd\n", *pDataSize, sizeof(OniImageRegistrationMode));
       return ONI_STATUS_ERROR;
     }
   }
