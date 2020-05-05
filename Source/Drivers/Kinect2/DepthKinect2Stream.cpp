@@ -29,6 +29,65 @@ constexpr inline DepthType filter_reliable_depth_value(const DepthType& depth_va
 {
     return depth_value < DEVICE_MAX_DEPTH_VAL ? depth_value : 0;
 };
+
+template < typename PixelType >
+struct CopyData
+{
+	PixelType* data;
+	std::size_t xOffset;
+	std::size_t yOffset;
+	std::size_t stride;
+};
+
+template < const bool mirroring, typename PixelType, typename PixelKernelFn  >
+constexpr inline void copy_frame
+(
+	const CopyData<const PixelType>& src,
+	const CopyData<PixelType>& dst,
+	const std::size_t width, const std::size_t height,
+	PixelKernelFn&& kernelFn
+)
+{
+	constexpr const auto first = [](auto& cd)
+	{
+		return cd.data + cd.xOffset + cd.yOffset * cd.stride;
+	};
+	constexpr const auto colPtr = [](auto& cd, auto pixPtr, const std::size_t y)
+	{
+		return pixPtr + y * cd.stride;
+	};
+
+	const auto srcPix = first(src);
+	const auto dstPix = first(dst);
+
+	for (std::size_t y = 0; y < height; ++y)
+	{
+		const PixelType* srcPtr = colPtr(src, srcPix, y);
+		PixelType* dstPtr = colPtr(dst, dstPix, y);
+		if constexpr (mirroring)
+		{
+			dstPtr += width;
+			for (std::size_t x = 0; x < width; ++x)
+				*dstPtr-- = kernelFn(*srcPtr++, x, y);
+		}
+		else
+		{
+			for (std::size_t x = 0; x < width; ++x)
+				*dstPtr++ = kernelFn(*srcPtr++, x, y);
+		}
+	}
+}
+
+template < const bool mirroring, typename PixelType >
+constexpr inline void copy_frame
+(
+	const CopyData<const PixelType>& src,
+	const CopyData<PixelType>& dst,
+	const std::size_t width, const std::size_t height
+)
+{
+	copy_frame<mirroring, PixelType>(src, dst, width, height, [](const PixelType p, auto, auto) { return filter_reliable_depth_value(p); });
+}
 }
 
 DepthKinect2Stream::DepthKinect2Stream(Kinect2StreamImpl* pStreamImpl)
@@ -266,65 +325,6 @@ void DepthKinect2Stream::notifyAllProperties()
     BaseKinect2Stream::notifyAllProperties();
 }
 
-template < typename PixelType >
-struct CopyData
-{
-    PixelType*  data;
-    std::size_t xOffset;
-    std::size_t yOffset;
-    std::size_t stride;
-};
-
-template < const bool mirroring, typename PixelType, typename PixelKernelFn  >
-constexpr inline void copy_frame
-(
-    const CopyData<const PixelType>& src,
-    const CopyData<PixelType>& dst,
-    const std::size_t width, const std::size_t height,
-    PixelKernelFn&& kernelFn
-)
-{
-    constexpr const auto first = [](auto& cd)
-    {
-        return cd.data + cd.xOffset + cd.yOffset * cd.stride;
-    };
-    constexpr const auto colPtr = [](auto& cd, auto pixPtr, const std::size_t y)
-    {
-        return pixPtr + y * cd.stride;
-    };
-
-    const auto srcPix = first(src);
-    const auto dstPix = first(dst);
-
-	for (std::size_t y = 0; y < height; ++y)
-    {
-        const PixelType* srcPtr = colPtr(src, srcPix, y);
-		PixelType* dstPtr = colPtr(dst, dstPix, y);		
-		if constexpr (mirroring)
-        {
-            dstPtr += width;
-			for (std::size_t x = 0; x < width; ++x)
-				*dstPtr-- = kernelFn(*srcPtr++, x, y);
-		}
-		else
-        {
-			for (std::size_t x = 0; x < width; ++x)
-				*dstPtr++ = kernelFn(*srcPtr++, x, y);
-		}
-	}
-}
-
-template < const bool mirroring, typename PixelType >
-constexpr inline void copy_frame
-(
-    const CopyData<const PixelType>& src,
-    const CopyData<PixelType>& dst,
-    const std::size_t width, const std::size_t height
-)
-{
-    copy_frame<mirroring, PixelType>(src, dst, width, height, [](const PixelType p, auto, auto) { return filter_reliable_depth_value(p); });
-}
-
 void DepthKinect2Stream::copyDepthPixelsStraight(const UINT16* data_in, std::size_t width, std::size_t height, OniFrame* pFrame)
 {
 	if (width < pFrame->width || height < pFrame->height)
@@ -380,37 +380,36 @@ void DepthKinect2Stream::copyDepthPixelsWithImageRegistration(const UINT16* data
         }
     }
 
-    // Fill vertical gaps caused by the difference in the aspect ratio between depth and color resolutions
-    const auto kernelFn = [&](const UINT16 depth_value, const std::size_t x, const std::size_t y) -> UINT16
-    {
-        if (depth_value != 0)
-            return filter_reliable_depth_value(depth_value);
-
-        UINT16 davg = 0u;
-        std::size_t dw = 0;
-        for (int ky = std::max(static_cast<int>(y) - 1, 0); ky <= y + 1 && ky < height; ++ky)
-        {
-            const UINT16 kiter = *(m_registeredDepthMap + ky * width + x);
-            if (kiter != 0)
-            {
-                davg += kiter;
-                dw += std::abs(ky - static_cast<int>(y));
-            }
-        }
-        if (dw > 0)
-        {
-            assert(dw <= ((std::size_t)std::numeric_limits<UINT16>::max()));
-            davg /= static_cast<UINT16>(dw);
-        }
-        return davg;
-    };
-
     if (width < pFrame->width || height < pFrame->height)
 	    memset(pFrame->data, 0x00, pFrame->width * pFrame->height * sizeof(UINT16));
 
     const auto targetWidth = std::min(width, (std::size_t)pFrame->width);
     const auto targetHeight = std::min(height, (std::size_t)pFrame->height);
 
+	// Fill vertical gaps caused by the difference in the aspect ratio between depth and color resolutions
+	const auto kernelFn = [&](const UINT16 depth_value, const std::size_t x, const std::size_t y) -> UINT16
+	{
+		if (depth_value != 0)
+			return filter_reliable_depth_value(depth_value);
+
+		UINT16 davg = 0u;
+		std::size_t dw = 0;
+		for (int ky = std::max(static_cast<int>(y) - 1, 0); ky <= y + 1 && ky < height; ++ky)
+		{
+			const UINT16 kiter = *(m_registeredDepthMap + ky * width + x);
+			if (kiter != 0)
+			{
+				davg += kiter;
+				dw += std::abs(ky - static_cast<int>(y));
+			}
+		}
+		if (dw > 0)
+		{
+			assert(dw <= ((std::size_t)std::numeric_limits<UINT16>::max()));
+			davg /= static_cast<UINT16>(dw);
+		}
+		return davg;
+	};
     copy_frame<false, UINT16>
     (
         { m_registeredDepthMap, (std::size_t)pFrame->cropOriginX, (std::size_t)pFrame->cropOriginY, (std::size_t)width },
