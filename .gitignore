@@ -71,3 +71,5 @@ Source/Tools/NiViewer/NiViewer.vcxproj
 ThirdParty/PSCommon/XnLib/Source/XnLib.vcxproj
 Wrappers/java/jni/OpenNI.jni.vcxproj
 *.vcxproj
+
+.vs/

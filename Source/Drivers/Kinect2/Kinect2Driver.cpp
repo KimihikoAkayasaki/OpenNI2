@@ -1,22 +1,74 @@
 #include "Kinect2Driver.h"
+
+#include <iostream>
+
 #include "Kinect2Device.h"
 #include <Kinect.h>
+
+#include <boost/interprocess/shared_memory_object.hpp>
+#include <boost/interprocess/mapped_region.hpp>
+
+constexpr const char* Kinect2StatusSHMAddress = "KinectONEStatusSHM";
+boost::interprocess::mapped_region Kinect2StatusSHMRegion;
 
 using namespace oni::driver;
 using namespace kinect2_device;
 
-static const char VENDOR_VAL[] = "Microsoft";
-
 // adding more characters after "kinect" does not work with nite: please refer to here
 // https://github.com/OpenKinect/libfreenect2/issues/243#issuecomment-107170614
-static const char NAME_VAL[] = "Kinect"; 
+static const char NAME_VAL[] = "Kinect";
+static const char VENDOR_VAL[] = "Microsoft";
+
+void Kinect2Driver::updateKinect2StatusSHM(HRESULT _status)
+{
+	try
+	{
+		// Write all the memory to 1
+		std::memset(Kinect2StatusSHMRegion.get_address(),
+		            _status, Kinect2StatusSHMRegion.get_size());
+	}
+	catch (...)
+	{
+		std::cerr << "Couldn't write to boost/shared memory at name '" <<
+			Kinect2StatusSHMAddress << "', an exception occurred";
+	}
+}
 
 Kinect2Driver::Kinect2Driver(OniDriverServices* pDriverServices)
-  : DriverBase(pDriverServices)
-{}
-	
+	: DriverBase(pDriverServices)
+{
+	try
+	{
+		//Remove shared memory on construction and destruction
+		struct shm_remove
+		{
+			shm_remove() { boost::interprocess::shared_memory_object::remove(Kinect2StatusSHMAddress); }
+			~shm_remove() { boost::interprocess::shared_memory_object::remove(Kinect2StatusSHMAddress); }
+		} remover;
+
+		//Create a shared memory object.
+		boost::interprocess::shared_memory_object shm(
+			boost::interprocess::create_only,
+			Kinect2StatusSHMAddress,
+			boost::interprocess::read_write);
+
+		//Set size
+		shm.truncate(1000);
+
+		//Map the whole shared memory in this process
+		Kinect2StatusSHMRegion =
+			boost::interprocess::mapped_region(shm, boost::interprocess::read_write);
+	}
+	catch (...)
+	{
+		std::cerr << "Couldn't create boost/shared memory at name '" <<
+			Kinect2StatusSHMAddress << "', an exception occurred";
+	}
+}
+
 Kinect2Driver::~Kinect2Driver()
-{}
+{
+}
 
 OniStatus Kinect2Driver::initialize(DeviceConnectedCallback connectedCallback,
                                     DeviceDisconnectedCallback disconnectedCallback,
@@ -24,123 +76,142 @@ OniStatus Kinect2Driver::initialize(DeviceConnectedCallback connectedCallback,
                                     void* pCookie)
 {
 	HRESULT hr;
-	DriverBase::initialize(connectedCallback, disconnectedCallback, deviceStateChangedCallback, pCookie);
+	DriverBase::initialize(
+		connectedCallback,
+		disconnectedCallback,
+		deviceStateChangedCallback,
+		pCookie);
 
-  // Get sensor instance
-  IKinectSensor* pKinectSensor = NULL;
-  hr = ::GetDefaultKinectSensor(&pKinectSensor);
-  if (FAILED(hr)) {
-    if (pKinectSensor) {
-      pKinectSensor->Release();
-    }
-    return ONI_STATUS_NO_DEVICE;
-  }
+	// Get sensor instance
+	IKinectSensor* pKinectSensor = nullptr;
+	hr = GetDefaultKinectSensor(&pKinectSensor);
+	if (FAILED(hr))
+	{
+		if (pKinectSensor)
+		{
+			pKinectSensor->Release();
+		}
+		updateKinect2StatusSHM(S_FALSE);
+		return ONI_STATUS_NO_DEVICE;
+	}
 
-  hr = pKinectSensor->Open();
-  if (FAILED(hr)) {
-    pKinectSensor->Release();
-    return ONI_STATUS_ERROR;
-  }
+	hr = pKinectSensor->Open();
+	if (FAILED(hr))
+	{
+		pKinectSensor->Release();
+		updateKinect2StatusSHM(S_FALSE);
+		return ONI_STATUS_ERROR;
+	}
 
-  // Wait some time to let the sensor initialize
-  BOOLEAN available = FALSE;
-  for (size_t i = 0; i < (60000 / 100); ++i)
-  {
-	  hr = pKinectSensor->get_IsAvailable(&available);
-	  if (SUCCEEDED(hr) && available)
-		  break;
-	  Sleep(100);
-  }
+	// Wait some time to let the sensor initialize
+	BOOLEAN available = FALSE;
+	for (size_t i = 0; i < (60000 / 100); ++i)
+	{
+		hr = pKinectSensor->get_IsAvailable(&available);
+		if (SUCCEEDED(hr) && available)
+			break;
+		Sleep(100);
+	}
 
-  if (!available)
-  {
-	  pKinectSensor->Close();
-	  pKinectSensor->Release();
-	  return ONI_STATUS_NO_DEVICE;
-  }
+	if (!available)
+	{
+		pKinectSensor->Close();
+		pKinectSensor->Release();
+		updateKinect2StatusSHM(S_FALSE);
+		return ONI_STATUS_NO_DEVICE;
+	}
 
-  // Get sensor info
-  OniDeviceInfo* pInfo = XN_NEW(OniDeviceInfo);
-  WCHAR sensorId[ONI_MAX_STR];
-  pKinectSensor->get_UniqueKinectId(ONI_MAX_STR, sensorId);
+	// Get sensor info
+	auto pInfo = XN_NEW(OniDeviceInfo);
+	WCHAR sensorId[ONI_MAX_STR];
+	pKinectSensor->get_UniqueKinectId(ONI_MAX_STR, sensorId);
 	size_t convertedChars = 0;
 	const size_t newsize = ONI_MAX_STR;
 	size_t origsize = wcslen(sensorId) + 1;
 	wcstombs_s(&convertedChars, pInfo->uri, origsize, sensorId, _TRUNCATE);
 	xnOSStrCopy(pInfo->vendor, VENDOR_VAL, ONI_MAX_STR);
 	xnOSStrCopy(pInfo->name, NAME_VAL, ONI_MAX_STR);
-	m_devices[pInfo] = NULL;
+	m_devices[pInfo] = nullptr;
 	deviceConnected(pInfo);
 	deviceStateChanged(pInfo, S_OK); // Sensor is ready
-  
-  // Close sensor instance
-  pKinectSensor->Close();
-  pKinectSensor->Release();
 
-  return ONI_STATUS_OK;
+	// Close sensor instance
+	pKinectSensor->Close();
+	pKinectSensor->Release();
+
+	updateKinect2StatusSHM(S_OK);
+	return ONI_STATUS_OK;
 }
 
 DeviceBase* Kinect2Driver::deviceOpen(const char* uri, const char* /*mode*/)
 {
-	for (xnl::Hash<OniDeviceInfo*, oni::driver::DeviceBase*>::Iterator iter = m_devices.Begin(); iter != m_devices.End(); ++iter)
+	for (xnl::Hash<OniDeviceInfo*, DeviceBase*>::Iterator iter = m_devices.Begin(); iter != m_devices.End()
+	     ; ++iter)
 	{
 		if (xnOSStrCmp(iter->Key()->uri, uri) == 0)
 		{
 			// Found
-			if (iter->Value() != NULL)
+			if (iter->Value() != nullptr)
 			{
 				// already using
+				updateKinect2StatusSHM(S_OK);
 				return iter->Value();
 			}
-			else
+			// Get sensor instance
+			IKinectSensor* pKinectSensor = nullptr;
+			HRESULT hr;
+			hr = GetDefaultKinectSensor(&pKinectSensor);
+			if (FAILED(hr))
 			{
-        // Get sensor instance
-        IKinectSensor* pKinectSensor = NULL;
-				HRESULT hr;
-        hr = ::GetDefaultKinectSensor(&pKinectSensor);
-        if (FAILED(hr)) {
-          if (pKinectSensor) {
-            pKinectSensor->Release();
-          }
-          return NULL;
-        }
-
-        // Compare sensor id. TODO: To be removed when multi-device support is added
-        char sensorUri[ONI_MAX_STR];
-        WCHAR sensorId[ONI_MAX_STR];
-        pKinectSensor->get_UniqueKinectId(ONI_MAX_STR, sensorId);
-	      size_t convertedChars = 0;
-	      const size_t newsize = ONI_MAX_STR;
-	      size_t origsize = wcslen(sensorId) + 1;
-	      wcstombs_s(&convertedChars, sensorUri, origsize, sensorId, _TRUNCATE);
-        if (xnOSStrCmp(iter->Key()->uri, sensorUri) != 0) {
-          pKinectSensor->Release();
-          return NULL;
-        }
-
-        // Initialize the Kinect2
-        hr = pKinectSensor->Open();
-        Kinect2Device* pDevice = XN_NEW(Kinect2Device, pKinectSensor);
-        if (!pDevice) {
-          pKinectSensor->Close();
-          pKinectSensor->Release();
-          return NULL;
-        }
-				iter->Value() = pDevice;
-				return pDevice;
+				if (pKinectSensor)
+				{
+					pKinectSensor->Release();
+				}
+				updateKinect2StatusSHM(S_FALSE);
+				return nullptr;
 			}
+
+			// Compare sensor id. TODO: To be removed when multi-device support is added
+			char sensorUri[ONI_MAX_STR];
+			WCHAR sensorId[ONI_MAX_STR];
+			pKinectSensor->get_UniqueKinectId(ONI_MAX_STR, sensorId);
+			size_t convertedChars = 0;
+			const size_t newsize = ONI_MAX_STR;
+			size_t origsize = wcslen(sensorId) + 1;
+			wcstombs_s(&convertedChars, sensorUri, origsize, sensorId, _TRUNCATE);
+			if (xnOSStrCmp(iter->Key()->uri, sensorUri) != 0)
+			{
+				pKinectSensor->Release();
+				updateKinect2StatusSHM(S_FALSE);
+				return nullptr;
+			}
+
+			// Initialize the Kinect2
+			hr = pKinectSensor->Open();
+			auto pDevice = XN_NEW(Kinect2Device, pKinectSensor);
+			if (!pDevice)
+			{
+				pKinectSensor->Close();
+				pKinectSensor->Release();
+				updateKinect2StatusSHM(S_FALSE);
+				return nullptr;
+			}
+			iter->Value() = pDevice;
+			updateKinect2StatusSHM(S_OK);
+			return pDevice;
 		}
 	}
-	return NULL;	
+	return nullptr;
 }
 
-void kinect2_device::Kinect2Driver::deviceClose(oni::driver::DeviceBase* pDevice)
+void Kinect2Driver::deviceClose(DeviceBase* pDevice)
 {
-	for (xnl::Hash<OniDeviceInfo*, oni::driver::DeviceBase*>::Iterator iter = m_devices.Begin(); iter != m_devices.End(); ++iter)
+	for (xnl::Hash<OniDeviceInfo*, DeviceBase*>::Iterator iter = m_devices.Begin(); iter != m_devices.End()
+	     ; ++iter)
 	{
 		if (iter->Value() == pDevice)
 		{
-			iter->Value() = NULL;
+			iter->Value() = nullptr;
 			XN_DELETE(pDevice);
 			return;
 		}
@@ -151,19 +222,21 @@ void kinect2_device::Kinect2Driver::deviceClose(oni::driver::DeviceBase* pDevice
 }
 
 void Kinect2Driver::shutdown()
-{}
+{
+}
 
 OniStatus Kinect2Driver::tryDevice(const char* uri)
 {
-	return ONI_STATUS_OK;	
+	return ONI_STATUS_OK;
 }
 
 void* Kinect2Driver::enableFrameSync(StreamBase** pStreams, int streamCount)
 {
-	return NULL;
+	return nullptr;
 }
 
 void Kinect2Driver::disableFrameSync(void* frameSyncGroup)
-{}
+{
+}
 
 ONI_EXPORT_DRIVER(kinect2_device::Kinect2Driver)

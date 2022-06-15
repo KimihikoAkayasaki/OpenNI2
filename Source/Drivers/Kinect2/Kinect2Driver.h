@@ -1,6 +1,8 @@
 #ifndef _KINECT2_DRIVER_H_
 #define _KINECT2_DRIVER_H_
 
+#include <Kinect.h>
+
 #include "Driver\OniDriverAPI.h"
 #include "XnHash.h"
 
@@ -16,6 +18,8 @@ namespace kinect2_device
                                    oni::driver::DeviceStateChangedCallback deviceStateChangedCallback,
                                    void* pCookie);
 	    virtual ~Kinect2Driver();
+
+		void updateKinect2StatusSHM(HRESULT _status);
 
 	    virtual oni::driver::DeviceBase* deviceOpen(const char* uri, const char* mode);
 	    virtual void deviceClose(oni::driver::DeviceBase* pDevice);
