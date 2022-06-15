@@ -28,6 +28,7 @@
 #include "XnLog.h"
 
 #pragma unmanaged
+#include <map>
 #include <boost/interprocess/shared_memory_object.hpp>
 #include <boost/interprocess/mapped_region.hpp>
 #pragma managed
@@ -46,14 +47,27 @@ void KinectDriver::updateKinectStatusSHM(HRESULT _status)
 {
 	try
 	{
-		// Write all the memory to 1
+		// We only can send simple chars so...
+		std::map<HRESULT, char> _status_map
+		{
+			{S_OK, 0},
+			{S_NUI_INITIALIZING, 1},
+			{E_NUI_NOTCONNECTED, 2},
+			{E_NUI_NOTGENUINE, 3},
+			{E_NUI_NOTSUPPORTED, 4},
+			{E_NUI_INSUFFICIENTBANDWIDTH, 5},
+			{E_NUI_NOTPOWERED, 6},
+			{E_NUI_NOTREADY, 7}
+		};
+
+		// Write all the memory
 		std::memset(KinectStatusSHMRegion.get_address(),
-		            _status, KinectStatusSHMRegion.get_size());
+		            _status_map[_status], KinectStatusSHMRegion.get_size());
 	}
-	catch (...)
+	catch (const boost::interprocess::interprocess_exception& e)
 	{
 		std::cerr << "Couldn't write to boost/shared memory at name '" <<
-			KinectStatusSHMAddress << "', an exception occurred";
+			KinectStatusSHMAddress << "', an exception occurred: " << e.what() << '\n';
 	}
 }
 
@@ -61,30 +75,30 @@ KinectDriver::KinectDriver(OniDriverServices* pDriverServices) : DriverBase(pDri
 {
 	try
 	{
-		//Remove shared memory on construction and destruction
-		struct shm_remove
+		// Remove shared memory on construction and destruction
+		static struct shm_remove
 		{
 			shm_remove() { boost::interprocess::shared_memory_object::remove(KinectStatusSHMAddress); }
 			~shm_remove() { boost::interprocess::shared_memory_object::remove(KinectStatusSHMAddress); }
 		} remover;
 
-		//Create a shared memory object.
+		// Create a shared memory object.
 		boost::interprocess::shared_memory_object shm(
 			boost::interprocess::create_only,
 			KinectStatusSHMAddress,
 			boost::interprocess::read_write);
 
-		//Set size
+		// Set size
 		shm.truncate(1000);
 
-		//Map the whole shared memory in this process
+		// Map the whole shared memory in this process
 		KinectStatusSHMRegion =
 			boost::interprocess::mapped_region(shm, boost::interprocess::read_write);
 	}
-	catch (...)
+	catch (const boost::interprocess::interprocess_exception& e)
 	{
 		std::cerr << "Couldn't create boost/shared memory at name '" <<
-			KinectStatusSHMAddress << "', an exception occurred";
+			KinectStatusSHMAddress << "', an exception occurred: " << e.what() << '\n';
 	}
 
 	NuiSetDeviceStatusCallback(&(KinectDriver::StatusProc), this);

@@ -23,14 +23,14 @@ void Kinect2Driver::updateKinect2StatusSHM(HRESULT _status)
 {
 	try
 	{
-		// Write all the memory to 1
+		// Write all the memory
 		std::memset(Kinect2StatusSHMRegion.get_address(),
-		            _status, Kinect2StatusSHMRegion.get_size());
+		            static_cast<char>(_status), Kinect2StatusSHMRegion.get_size());
 	}
-	catch (...)
+	catch (const boost::interprocess::interprocess_exception& e)
 	{
 		std::cerr << "Couldn't write to boost/shared memory at name '" <<
-			Kinect2StatusSHMAddress << "', an exception occurred";
+			Kinect2StatusSHMAddress << "', an exception occurred: " << e.what() << '\n';
 	}
 }
 
@@ -39,30 +39,30 @@ Kinect2Driver::Kinect2Driver(OniDriverServices* pDriverServices)
 {
 	try
 	{
-		//Remove shared memory on construction and destruction
-		struct shm_remove
+		// Remove shared memory on construction and destruction
+		static struct shm_remove
 		{
 			shm_remove() { boost::interprocess::shared_memory_object::remove(Kinect2StatusSHMAddress); }
 			~shm_remove() { boost::interprocess::shared_memory_object::remove(Kinect2StatusSHMAddress); }
 		} remover;
 
-		//Create a shared memory object.
+		// Create a shared memory object.
 		boost::interprocess::shared_memory_object shm(
 			boost::interprocess::create_only,
 			Kinect2StatusSHMAddress,
 			boost::interprocess::read_write);
 
-		//Set size
+		// Set size
 		shm.truncate(1000);
 
-		//Map the whole shared memory in this process
+		// Map the whole shared memory in this process
 		Kinect2StatusSHMRegion =
 			boost::interprocess::mapped_region(shm, boost::interprocess::read_write);
 	}
-	catch (...)
+	catch (const boost::interprocess::interprocess_exception& e)
 	{
 		std::cerr << "Couldn't create boost/shared memory at name '" <<
-			Kinect2StatusSHMAddress << "', an exception occurred";
+			Kinect2StatusSHMAddress << "', an exception occurred: " << e.what() << '\n';
 	}
 }
 
@@ -105,7 +105,7 @@ OniStatus Kinect2Driver::initialize(DeviceConnectedCallback connectedCallback,
 
 	// Wait some time to let the sensor initialize
 	BOOLEAN available = FALSE;
-	for (size_t i = 0; i < (60000 / 100); ++i)
+	for (size_t i = 0; i < 100; ++i) // 10 Seconds
 	{
 		hr = pKinectSensor->get_IsAvailable(&available);
 		if (SUCCEEDED(hr) && available)
