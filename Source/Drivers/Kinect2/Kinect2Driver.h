@@ -20,6 +20,7 @@ namespace kinect2_device
 	    virtual ~Kinect2Driver();
 
 		void updateKinect2StatusSHM(HRESULT _status);
+		bool getIsInitializationAllowed();
 
 	    virtual oni::driver::DeviceBase* deviceOpen(const char* uri, const char* mode);
 	    virtual void deviceClose(oni::driver::DeviceBase* pDevice);

@@ -39,6 +39,7 @@ public:
 	virtual ~KinectDriver();
 
 	void updateKinectStatusSHM(HRESULT _status);
+	bool getIsInitializationAllowed();
 
 	virtual oni::driver::DeviceBase* deviceOpen(const char* uri, const char* mode);
 	virtual void deviceClose(oni::driver::DeviceBase* pDevice);

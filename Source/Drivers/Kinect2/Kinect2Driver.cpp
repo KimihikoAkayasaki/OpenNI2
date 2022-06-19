@@ -19,51 +19,89 @@ using namespace kinect2_device;
 static const char NAME_VAL[] = "Kinect";
 static const char VENDOR_VAL[] = "Microsoft";
 
+bool Kinect2Driver::getIsInitializationAllowed()
+{
+	__try
+	{
+		return [&, this]
+		{
+			// Open already created shared memory object.
+			boost::interprocess::shared_memory_object shm(
+				boost::interprocess::open_only,
+				"KinectAllowedVersionSHM",
+				boost::interprocess::read_only);
+
+			// Map the whole shared memory in this process
+			boost::interprocess::mapped_region region(
+				shm, boost::interprocess::read_only);
+
+			// Check that memory was initialized to 1
+			auto mem = static_cast<char*>(region.get_address());
+			return static_cast<int>(*mem) == 2; // V2
+		}();
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		std::cerr << "Couldn't read from boost/shared memory at name '" <<
+			"KinectAllowedVersionSHM" << "', an exception occurred\n";
+		return true; // Just in case
+	}
+}
+
 void Kinect2Driver::updateKinect2StatusSHM(HRESULT _status)
 {
-	try
+	__try
 	{
-		// Write all the memory
-		std::memset(Kinect2StatusSHMRegion.get_address(),
-		            static_cast<char>(_status), Kinect2StatusSHMRegion.get_size());
+		[&, this]
+		{
+			// Write all the memory
+			std::memset(Kinect2StatusSHMRegion.get_address(),
+			            static_cast<char>(_status), Kinect2StatusSHMRegion.get_size());
+		}();
 	}
-	catch (const boost::interprocess::interprocess_exception& e)
+	__except (EXCEPTION_EXECUTE_HANDLER)
 	{
 		std::cerr << "Couldn't write to boost/shared memory at name '" <<
-			Kinect2StatusSHMAddress << "', an exception occurred: " << e.what() << '\n';
+			Kinect2StatusSHMAddress << "', an exception occurred\n";
 	}
 }
 
 Kinect2Driver::Kinect2Driver(OniDriverServices* pDriverServices)
 	: DriverBase(pDriverServices)
 {
-	try
+	[&, this]
 	{
-		// Remove shared memory on construction and destruction
-		static struct shm_remove
+		__try
 		{
-			shm_remove() { boost::interprocess::shared_memory_object::remove(Kinect2StatusSHMAddress); }
-			~shm_remove() { boost::interprocess::shared_memory_object::remove(Kinect2StatusSHMAddress); }
-		} remover;
+			[&, this]
+			{
+				// Remove shared memory on construction and destruction
+				static struct shm_remove
+				{
+					shm_remove() { boost::interprocess::shared_memory_object::remove(Kinect2StatusSHMAddress); }
+					~shm_remove() { boost::interprocess::shared_memory_object::remove(Kinect2StatusSHMAddress); }
+				} remover;
 
-		// Create a shared memory object.
-		boost::interprocess::shared_memory_object shm(
-			boost::interprocess::create_only,
-			Kinect2StatusSHMAddress,
-			boost::interprocess::read_write);
+				// Create a shared memory object.
+				boost::interprocess::shared_memory_object shm(
+					boost::interprocess::create_only,
+					Kinect2StatusSHMAddress,
+					boost::interprocess::read_write);
 
-		// Set size
-		shm.truncate(1000);
+				// Set size
+				shm.truncate(1000);
 
-		// Map the whole shared memory in this process
-		Kinect2StatusSHMRegion =
-			boost::interprocess::mapped_region(shm, boost::interprocess::read_write);
-	}
-	catch (const boost::interprocess::interprocess_exception& e)
-	{
-		std::cerr << "Couldn't create boost/shared memory at name '" <<
-			Kinect2StatusSHMAddress << "', an exception occurred: " << e.what() << '\n';
-	}
+				// Map the whole shared memory in this process
+				Kinect2StatusSHMRegion =
+					boost::interprocess::mapped_region(shm, boost::interprocess::read_write);
+			}();
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			std::cerr << "Couldn't create boost/shared memory at name '" <<
+				Kinect2StatusSHMAddress << "', an exception occurred\n";
+		}
+	}();
 }
 
 Kinect2Driver::~Kinect2Driver()
@@ -85,7 +123,7 @@ OniStatus Kinect2Driver::initialize(DeviceConnectedCallback connectedCallback,
 	// Get sensor instance
 	IKinectSensor* pKinectSensor = nullptr;
 	hr = GetDefaultKinectSensor(&pKinectSensor);
-	if (FAILED(hr))
+	if (!getIsInitializationAllowed() || FAILED(hr))
 	{
 		if (pKinectSensor)
 		{

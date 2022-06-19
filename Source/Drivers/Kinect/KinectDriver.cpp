@@ -43,63 +43,101 @@ static const char NAME_VAL[] = "Kinect";
 #define MICROSOFT_VENDOR_ID 0x045e
 #define KINECT_FOR_WINDOWS_PRODUCT_ID 0x02bf
 
+bool KinectDriver::getIsInitializationAllowed()
+{
+	__try
+	{
+		return [&, this]
+		{
+			// Open already created shared memory object.
+			boost::interprocess::shared_memory_object shm(
+				boost::interprocess::open_only,
+				"KinectAllowedVersionSHM",
+				boost::interprocess::read_only);
+
+			// Map the whole shared memory in this process
+			boost::interprocess::mapped_region region(
+				shm, boost::interprocess::read_only);
+
+			// Check that memory was initialized to 1
+			auto mem = static_cast<char*>(region.get_address());
+			return static_cast<int>(*mem) == 1; // V1
+		}();
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		std::cerr << "Couldn't read from boost/shared memory at name '" <<
+			"KinectAllowedVersionSHM" << "', an exception occurred\n";
+		return true; // Just in case
+	}
+}
+
 void KinectDriver::updateKinectStatusSHM(HRESULT _status)
 {
-	try
+	__try
 	{
-		// We only can send simple chars so...
-		std::map<HRESULT, char> _status_map
+		[&, this]
 		{
-			{S_OK, 0},
-			{S_NUI_INITIALIZING, 1},
-			{E_NUI_NOTCONNECTED, 2},
-			{E_NUI_NOTGENUINE, 3},
-			{E_NUI_NOTSUPPORTED, 4},
-			{E_NUI_INSUFFICIENTBANDWIDTH, 5},
-			{E_NUI_NOTPOWERED, 6},
-			{E_NUI_NOTREADY, 7}
-		};
+			// We only can send simple chars so...
+			std::map<HRESULT, char> _status_map
+			{
+				{S_OK, 0},
+				{S_NUI_INITIALIZING, 1},
+				{E_NUI_NOTCONNECTED, 2},
+				{E_NUI_NOTGENUINE, 3},
+				{E_NUI_NOTSUPPORTED, 4},
+				{E_NUI_INSUFFICIENTBANDWIDTH, 5},
+				{E_NUI_NOTPOWERED, 6},
+				{E_NUI_NOTREADY, 7}
+			};
 
-		// Write all the memory
-		std::memset(KinectStatusSHMRegion.get_address(),
-		            _status_map[_status], KinectStatusSHMRegion.get_size());
+			// Write all the memory
+			std::memset(KinectStatusSHMRegion.get_address(),
+			            _status_map[_status], KinectStatusSHMRegion.get_size());
+		}();
 	}
-	catch (const boost::interprocess::interprocess_exception& e)
+	__except (EXCEPTION_EXECUTE_HANDLER)
 	{
 		std::cerr << "Couldn't write to boost/shared memory at name '" <<
-			KinectStatusSHMAddress << "', an exception occurred: " << e.what() << '\n';
+			KinectStatusSHMAddress << "', an exception occurred\n";
 	}
 }
 
 KinectDriver::KinectDriver(OniDriverServices* pDriverServices) : DriverBase(pDriverServices)
 {
-	try
+	[&, this]
 	{
-		// Remove shared memory on construction and destruction
-		static struct shm_remove
+		__try
 		{
-			shm_remove() { boost::interprocess::shared_memory_object::remove(KinectStatusSHMAddress); }
-			~shm_remove() { boost::interprocess::shared_memory_object::remove(KinectStatusSHMAddress); }
-		} remover;
+			[&, this]
+			{
+				// Remove shared memory on construction and destruction
+				static struct shm_remove
+				{
+					shm_remove() { boost::interprocess::shared_memory_object::remove(KinectStatusSHMAddress); }
+					~shm_remove() { boost::interprocess::shared_memory_object::remove(KinectStatusSHMAddress); }
+				} remover;
 
-		// Create a shared memory object.
-		boost::interprocess::shared_memory_object shm(
-			boost::interprocess::create_only,
-			KinectStatusSHMAddress,
-			boost::interprocess::read_write);
+				// Create a shared memory object.
+				boost::interprocess::shared_memory_object shm(
+					boost::interprocess::create_only,
+					KinectStatusSHMAddress,
+					boost::interprocess::read_write);
 
-		// Set size
-		shm.truncate(1000);
+				// Set size
+				shm.truncate(1000);
 
-		// Map the whole shared memory in this process
-		KinectStatusSHMRegion =
-			boost::interprocess::mapped_region(shm, boost::interprocess::read_write);
-	}
-	catch (const boost::interprocess::interprocess_exception& e)
-	{
-		std::cerr << "Couldn't create boost/shared memory at name '" <<
-			KinectStatusSHMAddress << "', an exception occurred: " << e.what() << '\n';
-	}
+				// Map the whole shared memory in this process
+				KinectStatusSHMRegion =
+					boost::interprocess::mapped_region(shm, boost::interprocess::read_write);
+			}();
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER)
+		{
+			std::cerr << "Couldn't create boost/shared memory at name '" <<
+				KinectStatusSHMAddress << "', an exception occurred\n";
+		}
+	}();
 
 	NuiSetDeviceStatusCallback(&(KinectDriver::StatusProc), this);
 }
@@ -117,7 +155,7 @@ OniStatus KinectDriver::initialize(DeviceConnectedCallback connectedCallback,
 	int iSensorCount = 0;
 	INuiSensor* pNuiSensor;
 	DriverBase::initialize(connectedCallback, disconnectedCallback, deviceStateChangedCallback, pCookie);
-	if (NuiGetSensorCount(&iSensorCount) < 0 || iSensorCount < 1)
+	if (!getIsInitializationAllowed() || NuiGetSensorCount(&iSensorCount) < 0 || iSensorCount < 1)
 	{
 		updateKinectStatusSHM(E_NUI_NOTCONNECTED);
 		return ONI_STATUS_NO_DEVICE;
